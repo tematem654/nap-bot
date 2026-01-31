@@ -1,13 +1,9 @@
 import json
 import logging
-from datetime import datetime, timedelta
 import os
-TOKEN = os.getenv("TOKEN")
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
+from datetime import datetime, timedelta
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -17,10 +13,11 @@ from telegram.ext import (
     filters,
 )
 
+TOKEN = os.getenv("TOKEN")
 REMINDERS_FILE = "reminders.json"
 
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
 
@@ -39,61 +36,60 @@ def save_reminders(data):
 
 # ---------- commands ----------
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Привет 👋\n"
-        "Напиши текст напоминания.\n"
-        "Команда: /remind"
+        "Я бот-напоминалка.\n\n"
+        "Команда:\n"
+        "/remind — создать напоминание"
     )
 
-async def remind(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Напиши текст напоминания ✍️")
+async def remind(update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
     context.user_data["waiting_text"] = True
+    await update.message.reply_text("Напиши текст напоминания 📝")
 
 # ---------- text ----------
 
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.user_data.get("waiting_text"):
-        context.user_data["reminder_text"] = update.message.text
-        context.user_data["waiting_text"] = False
+async def handle_text(update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get("waiting_text"):
+        return
 
-        keyboard = [
-            [InlineKeyboardButton("Через дни (1–6)", callback_data="days_input")],
-            [InlineKeyboardButton("Через недели (1–3)", callback_data="weeks_input")],
-            [InlineKeyboardButton("Через месяцы (1–11)", callback_data="month_input")],
-            [InlineKeyboardButton("Через год", callback_data="year")],
-        ]
+    context.user_data["reminder_text"] = update.message.text
+    context.user_data["waiting_text"] = False
 
-        await update.message.reply_text(
-            "Когда напомнить?",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
+    keyboard = [
+        [InlineKeyboardButton("Через дни (1–6)", callback_data="days")],
+        [InlineKeyboardButton("Через недели (1–3)", callback_data="weeks")],
+        [InlineKeyboardButton("Через месяцы (1–11)", callback_data="months")],
+        [InlineKeyboardButton("Через год", callback_data="year")],
+    ]
+
+    await update.message.reply_text(
+        "Когда напомнить?",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
 # ---------- buttons ----------
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_handler(update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    now = datetime.now()
-
-    if query.data == "days_input":
+    if query.data == "days":
         context.user_data["waiting_days"] = True
         await query.edit_message_text("Введите количество дней (1–6):")
-        return
 
-    if query.data == "weeks_input":
+    elif query.data == "weeks":
         context.user_data["waiting_weeks"] = True
         await query.edit_message_text("Введите количество недель (1–3):")
-        return
 
-    if query.data == "month_input":
-        context.user_data["waiting_month"] = True
+    elif query.data == "months":
+        context.user_data["waiting_months"] = True
         await query.edit_message_text("Введите количество месяцев (1–11):")
-        return
 
-    if query.data == "year":
-        remind_time = now + timedelta(days=365)
+    elif query.data == "year":
+        remind_time = datetime.now() + timedelta(days=365)
         save_reminder(query.message.chat_id, context, remind_time)
         await query.edit_message_text(
             f"Готово ✅\nДата: {remind_time.strftime('%d.%m.%Y %H:%M')}"
@@ -101,7 +97,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------- inputs ----------
 
-async def handle_days_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_days_input(update, context: ContextTypes.DEFAULT_TYPE):
     if not context.user_data.get("waiting_days"):
         return
 
@@ -118,11 +114,10 @@ async def handle_days_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_reminder(update.message.chat_id, context, remind_time)
 
     await update.message.reply_text(
-        f"Готово ✅\nЧерез {days} дн.\n"
-        f"Дата: {remind_time.strftime('%d.%m.%Y %H:%M')}"
+        f"Готово ✅\nЧерез {days} дн.\nДата: {remind_time.strftime('%d.%m.%Y %H:%M')}"
     )
 
-async def handle_weeks_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_weeks_input(update, context: ContextTypes.DEFAULT_TYPE):
     if not context.user_data.get("waiting_weeks"):
         return
 
@@ -132,17 +127,18 @@ async def handle_weeks_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
             raise ValueError
     except ValueError:
         await update.message.reply_text("Введите число от 1 до 3 ❗")
-        returncontext.user_data["waiting_weeks"] = False
+        return
+
+    context.user_data["waiting_weeks"] = False
     remind_time = datetime.now() + timedelta(weeks=weeks)
     save_reminder(update.message.chat_id, context, remind_time)
 
     await update.message.reply_text(
-        f"Готово ✅\nЧерез {weeks} нед.\n"
-        f"Дата: {remind_time.strftime('%d.%m.%Y %H:%M')}"
+        f"Готово ✅\nЧерез {weeks} нед.\nДата: {remind_time.strftime('%d.%m.%Y %H:%M')}"
     )
 
-async def handle_month_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.user_data.get("waiting_month"):
+async def handle_months_input(update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get("waiting_months"):
         return
 
     try:
@@ -153,13 +149,12 @@ async def handle_month_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("Введите число от 1 до 11 ❗")
         return
 
-    context.user_data["waiting_month"] = False
+    context.user_data["waiting_months"] = False
     remind_time = datetime.now() + timedelta(days=30 * months)
     save_reminder(update.message.chat_id, context, remind_time)
 
     await update.message.reply_text(
-        f"Готово ✅\nЧерез {months} мес.\n"
-        f"Дата: {remind_time.strftime('%d.%m.%Y %H:%M')}"
+        f"Готово ✅\nЧерез {months} мес.\nДата: {remind_time.strftime('%d.%m.%Y %H:%M')}"
     )
 
 # ---------- save ----------
@@ -168,7 +163,7 @@ def save_reminder(chat_id, context, remind_time):
     reminders = load_reminders()
     reminders.append({
         "chat_id": chat_id,
-        "text": context.user_data["reminder_text"],
+        "text": context.user_data.get("reminder_text"),
         "time": remind_time.isoformat(),
     })
     save_reminders(reminders)
@@ -202,7 +197,7 @@ def main():
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days_input))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_weeks_input))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_month_input))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_months_input))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     app.job_queue.run_repeating(check_reminders, interval=30, first=10)
@@ -210,6 +205,5 @@ def main():
     print("Бот запущен")
     app.run_polling()
 
-if __name__ == "__main__":
-
+if name == "__main__":
     main()
