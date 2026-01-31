@@ -1,4 +1,4 @@
-import json
+from telegram import Updateimport json
 import logging
 import os
 from datetime import datetime, timedelta
@@ -187,7 +187,7 @@ async def check_reminders(context: ContextTypes.DEFAULT_TYPE):
     save_reminders(remaining)
 
 # ---------- main ----------
-
+from telegram import Update
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -206,5 +206,6 @@ def main():
     app.run_polling()
 if __name__ == "__main__":
     main()
+
 
 
