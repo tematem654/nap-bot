@@ -203,9 +203,10 @@ def main():
     app.job_queue.run_repeating(check_reminders, interval=30, first=10)
 
     print("Бот запущен")
-    app.run_polling()
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 if __name__ == "__main__":
     main()
+
 
 
 
